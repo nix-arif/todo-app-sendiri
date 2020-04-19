@@ -1,11 +1,22 @@
 let express = require('express')
-let ourApp = express()
+let mongodb = require('mongodb')
+let db
+let app = express()
 
-ourApp.use(express.urlencoded({extended: false}))
+app.use(express.json())
+app.use(express.static('public'))
+app.use(express.urlencoded({extended: false}))
 
-ourApp.get('/', function(req, res) {
-    res.send(`
-    <!DOCTYPE html>
+let connectionString = 'mongodb+srv://todoAppUser:arif@cluster0-dwjsc.mongodb.net/TodoApp?retryWrites=true&w=majority'
+mongodb.connect(connectionString, {useUnifiedTopology: true}, function(err, client) {
+    db = client.db()
+    app.listen(3000)
+})
+
+app.get('/', function(req, res) {
+    db.collection('items').find().toArray(function(err, items) {
+        res.send(`
+        <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -16,45 +27,52 @@ ourApp.get('/', function(req, res) {
 </head>
 
 <body>
-    <div class="container">
-        <h1 class="display-4 text-center">To-Do-App</h1>
-        
-        <div class="jumbotron p-3 shadow">
-            <form class="d-flex" action="">
-                <input class="form-control mr-3">
-                <button class="btn btn-primary">Submit</button>
-            </form>
-        </div>
+<div class="container">
+    <h1 class="display-4 text-center py-1">To-Do App</h1>
 
-        <ul class="list-group">
-            <li class="list-group-item list-gruop-item-action d-flex align-items-center justify-content-between">
-                <span>Item1</span>
-                <div>
-                    <button class="btn btn-secondary btn-sm mr-1">Edit</button>
-                    <button class="btn btn-danger btn-sm">Delete</button>
-                </div>
-            </li>
-        </ul>
+    <div class="jumbotron p-3 shadow">
+        <form action="/create-item" class="d-flex" method="POST">
+            <input name="item" type="text" class="form-control mr-3">
+            <button class="btn btn-primary">Submit</button>
+        </form>
     </div>
-        
 
+    <ul class="list-group">
+    ${items.map(function(item) {
+        return `<li class="list-group-item list-group-item-action d-flex align-items-center justify-content-between">
+        <span class="text-item">${item.text}</span>
+        <div>
+            <button data-id="${item._id}" class="edit-me btn btn-secondary btn-sm mr-1">Edit</button>
+            <button data-id="${item._id}" class="delete-me btn btn-danger btn-sm">Delete</button>
+        </div>
+    </li>`
+    }).join('')}
+        
+    </ul>
+</div>
+
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="/browser.js"></script>
 </body>
 </html>
-    `)
+        `)
+    })
 })
 
-ourApp.post('/answer', function(req, res) {
-    if (req.body.skyColor.toUpperCase() == 'BLUE') {
-        res.send(`
-        <p>Congratulation, your answer is correct!!</p>
-        <a href="/">Return to homepage</a>
-        `)
-    } else {
-        res.send(`
-        <p>Sorry, your are wrong</p>
-        <a href="/">Return to homepage</a>
-        `)
-    }
+app.post('/create-item', function(req, res) {
+    db.collection('items').insertOne({text: req.body.item}, function() {
+        res.redirect('/')
+    })
 })
 
-ourApp.listen(3000)
+app.post('/update-item', function(req, res) {
+    db.collection('items').findOneAndUpdate({_id: new mongodb.ObjectId(req.body.id)}, {$set: {text: req.body.text}}, function() {
+        res.send("Success")
+    })
+})
+
+app.post('/delete-item', function(req, res) {
+    db.collection('items').deleteOne({_id: new mongodb.ObjectId(req.body.id)}, function() {
+        res.send("Success")
+    })
+})
